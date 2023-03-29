@@ -52,7 +52,7 @@ Note that using the following commands, you can get details on other hardware:
 OpenMP is natively embedded in GCC. Install GCC and all needed tools:
 
 ```
-dnf groupinstall "Development Tools" -y
+sudo apt-get update && sudo apt-get install gcc make build-essential -y
 ```
 
 Then create a new file called my_openmp_code.c with the following content:
@@ -91,12 +91,12 @@ And compile it with gcc using the -fopenmp flag:
 gcc my_openmp_code.c -fopenmp
 ```
 
-You will get an executable a.out.
+You will get an executable `a.out`.
 
 Ask system to only use 1 thread, and launch the executable with a time to know how much time program execution took:
 
 ```
-export OMP_NUM_THREADS=1
+:~$ export OMP_NUM_THREADS=1
 :~$ time ./a.out
 Hello from process: 0
 Iteration 0
@@ -120,7 +120,7 @@ You can see it took 20s, as expected (2s per iteration, for 10 iterations).
 Now lets request 4 threads:
 
 ```
-export OMP_NUM_THREADS=4
+:~$ export OMP_NUM_THREADS=4
 :~$ time ./a.out
 Hello from process: 0
 Iteration 0
@@ -199,7 +199,7 @@ mpicc my_mpi_code.c -o my_mpi_code
 And execute it with the mpirun runtime:
 
 ```
-mpirun --allow-run-as-root -n 2 --host localhost,localhost my_mpi_code
+mpirun -n 2 --host localhost,localhost my_mpi_code
 ```
 
 You should see that 2 isolated processes were created. Both were able to show their rank id, while being aware of the total number of process.
@@ -388,7 +388,9 @@ Note that when dealing with a lot of small tasks, you can use a loop and arrays 
 
 Install python3 on local system:
 
-sudo apt install python3
+`
+sudo apt install python3 python3-pip
+`
 
 Once installed, create a serial program as a reference, with basic sleep function:
 
@@ -606,7 +608,7 @@ if __name__ == "__main__":
 ```
 
 This very simple example will run a synthetic costly simulation (simulated by a 4s sleep).
-Note that we added the pure=False parameter. Dask is smart enough to detect that entry values are the same, and so will run the task only once here (we could use random numbers too to prevent that behavior).
+Note that we added the `pure=False` parameter. Dask is smart enough to detect that entry values are the same, and so will run the task only once here (we could use random numbers too to prevent that behavior).
 
 Lets create the dask cluster. We will need 3 ssh terminals: 1 for launching the python code, 1 to run the dask scheduler, and 1 to run the dask worker.
 
@@ -704,3 +706,7 @@ Launch this program, and at the same time, monitor the output inside the dask sc
 More documentation is available at https://examples.dask.org/array.html .
 
 Dask is a powerful tool, that has the capacity to run both locally and distributed, allowing codes to be run on any platforms.
+
+## Do it yourself
+
+Take some time now to manipulate all these parallel languages. Design a test case, and develop it in the language of your choice.

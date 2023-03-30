@@ -94,17 +94,81 @@ Note also that while it seem a difficult to use editor at first sight, after few
 
 Bash scripting is a mandatory knowledge to manipulate distant Linux systems.
 
-Lets create a simple script:
+### Hello
 
-Hello world
+Lets create a simple script. Create file hello with the following content:
 
-Calculator and variables
+```bash
+#!/usr/bin/env bash
+echo "Hello world!"
+```
 
-Loops
+And make it executable:
 
-Pipes
+```
+chmod +x hello
+```
 
-Colors
+Now, if you execute it, you should see the message "Hello world!".
+
+### Calculator
+
+A second example is to make a basic interactive calculator.
+
+```bash
+#!/usr/bin/env bash
+
+echo "Please enter operation to perform (like 4+3 or 2*4):"
+read operation
+echo "You requested to perform $operation calculation."
+eval echo Result is: $(($operation))
+```
+
+Make it executable and test it. Note that eval allows to evaluate a line before executing it.
+
+### Loops and arrays
+
+```bash
+#!/usr/bin/env bash
+
+a=(1 2 3 4 5)
+b=(6 7 8 9 10)
+
+for (( i=0; i<5; i++ ))
+do
+        c[$i]=$((a[i] + b[i]))
+done
+
+echo ${c[@]}
+```
+
+### Pipes
+
+Pipes are useful to accumulate commands on the output and filter it.
+
+For example:
+
+```bash
+echo -e "Hello\nthis is\na message\nfor you" | grep -v Hello | sed 's/message/note/' | grep "^a" | awk -F ' ' '{print $2}'
+```
+
+Try adding the commands from the left to right one by one and execute it each time, to visualize the progress of filtering.
+
+###
+
+Colors allow you to create nice scripts output, or simply show Errors/Warnings more effectively.
+
+You can copy and past the following commands to see the effect on output. Note that not all shells support all features.
+
+```bash
+echo -e "\e[1mBold Text\e[0m"
+echo -e "\e[4mUnderlined Text\e[0m"
+echo -e "\e[31mRed Text\e[0m"
+echo -e "\e[42mGreen Background\e[0m"
+echo -e "\e[5mBlinking Text\e[0m"
+```
+
+For more details on colors, you can refer to https://www.shellhacks.com/bash-colors/
 
 ## Modules
 
@@ -118,31 +182,170 @@ sudo apt-get install lmod -y
 
 Environment Modules are useful to load environment variables, and unload them for a specific library or software made available to users. They are also efficient at loading dependencies needed for a specific element.
 
+You need to source lmod to activate it:
+
+```
+source /usr/share/lmod/lmod/init/bash
+```
+
+This can be added in .bashrc file for auto sourcing at user logging.
+
 Create 2 naive example tools, 1 needing the other one to run.
 Create first file basic_tool_1 in folder /tmp/basic_tools/bin (you will need to create this folder) with the following content:
 
+```bash
 #!/usr/bin/env bash
 echo Value is 4
+```
 
 And make it executable:
 
-chmod +x /tmp/basic_tools/bin/basic_tool_1
+```bash
+chmod +x /tmp/basic_tools/basic_tool_1
+```
 
-Then create another tool, that needs the first one to run. Create folder /tmp/advanced_tools/bin and add in this folder file advanced_tool_1 with the following content:
+Then create another tool, that needs the first one to run. Create folder /tmp/advanced_tools/ and add in this folder file advanced_tool_1 with the following content:
 
+```bash
 #!/usr/bin/env bash
 initial_value=$(basic_tool_1 | awk -F ' ' '{print $3}')
 echo Final value is $((4 * initial_value))
+```
+
+If you execute now basic_tool_1, you can see it will work. However, advanced_tool_1 will fail: /tmp/`advanced_tools/advanced_tool_1: line 2: basic_tool_1: command not found`.
+
+Lets create 2 modules files, one for our first tool first.
+Create folder and file for basic tools:
+
+```
+mkdir $HOME/.modules/basic_tools/ -p
+vi $HOME/.modules/basic_tools/1.0.0.lua
+```
+
+And add the following content to file:
+
+```lua
+help([[
+"Our basic tools"
+]])
+prepend_path("PATH", "/tmp/basic_tools/")
+```
+
+Then create advanced tools folder and file:
+
+```
+mkdir $HOME/.modules/advanced_tools/ -p
+vi $HOME/.modules/advanced_tools/1.0.0.lua
+```
+
+And add the following content to file:
+
+```
+help([[
+"Our advanced tools"
+]])
+prepend_path("PATH", "/tmp/advanced_tools/")
+load("basic_tools")
+```
+
+Now, add this module tree to lmod environment variable so lmod can find it:
+
+```
+module use $HOME/.modules
+```
+
+You can now list modules:
+
+```
+$ module avail
+
+-------------------------------------------------- /home/oxedions/.modules ---------------------------------------------------
+   advanced_tools/1.0.0    basic_tools/1.0.0
+```
+
+You can also check that no modules are loaded for now using module list.
+
+Load basic_tools module, and check if basic_tool_1 command is now available without having to use its full path:
+
+```
+module load basic_tools
+basic_tool_1
+```
+
+You can now see using `module list` command that basic_tools is loaded.
+You can also see that advanced_tool_1 is not available. Unload basic_tools module now:
+
+```
+module unload basic_tools
+```
+
+Now, lets load the advanced_tools module:
+
+```
+module load advanced_tools
+```
+
+You can see using `module list` command that Lmod loaded advanced_tools, but also its dependencies, so basic_tools.
+
+Now, the command advanced_tool_1 is available and is functional.
+
+```
+~$ advanced_tool_1
+Final value is 16
+~$
+```
+
+For more details on how to create module files, please refer to official Lmod documentation: https://lmod.readthedocs.io/
 
 ## Slurm cluster
 
+For this part of the training, we need a slurm cluster. We are going to configure a very minimal cluster, with a single node, that will act as both controller and worker.
+
+### Install munge and generate a key
+
+Install munge, that is used by slurm to authenticate between nodes, and generate its needed key.
+Then start the service.
+
+```
+sudo apt-get install munge libmunge-dev libmunge2
+sudo mungekey -f
+sudo systemctl start munge
+```
+
 ### Build Slurm
 
+Now download Slurm, build it, and install it.
+
+```
 sudo apt-get install gcc make wget libmunge2 libmunge-dev munge
 wget https://download.schedmd.com/slurm/slurm-23.02.0.tar.bz2
 tar xvjf slurm-23.02.0.tar.bz2
 cd slurm-23.02.0
-./configure
-make
+./configure --with-systemdsystemunitdir=/lib/systemd/system
+make # do not use -j for Slurm!
 sudo make install
 
+sudo groupadd -g 567 slurm
+sudo useradd  -m -c "Slurm workload manager" -d /etc/slurm -u 567 -g slurm -s /bin/false slurm
+sudo mkdir /etc/slurm
+sudo mkdir /var/log/slurm
+sudo mkdir -p /var/spool/slurmd/StateSave
+sudo chown -R slurm:slurm /var/log/slurm
+sudo chown -R slurm:slurm /var/spool/slurmd
+
+```
+
+Now create a very minimal file in `/etc/slurm/slurm.conf` with the following content.
+We will assume here that your node hostname is `mgt1`. You need to update it to your real node name for slurm to start. You can get your real node name using command `hostnamectl` (You nee the Static hostname)
+
+```
+
+
+```
+
+And start slurm controller and worker daemons:
+
+sudo systemctl start slurmctld
+sudo systemctl start slurmd
+
+You should now see the cluster using command `sinfo`.

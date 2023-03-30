@@ -312,40 +312,258 @@ sudo mungekey -f
 sudo systemctl start munge
 ```
 
-### Build Slurm
+### Install Slurm
 
-Now download Slurm, build it, and install it.
+Now install slurm and configure it with a very minimal cluster.
 
 ```
-sudo apt-get install gcc make wget libmunge2 libmunge-dev munge
-wget https://download.schedmd.com/slurm/slurm-23.02.0.tar.bz2
-tar xvjf slurm-23.02.0.tar.bz2
-cd slurm-23.02.0
-./configure --with-systemdsystemunitdir=/lib/systemd/system
-make # do not use -j for Slurm!
-sudo make install
-
-sudo groupadd -g 567 slurm
-sudo useradd  -m -c "Slurm workload manager" -d /etc/slurm -u 567 -g slurm -s /bin/false slurm
+sudo apt install slurmd slurmctld
 sudo mkdir /etc/slurm
 sudo mkdir /var/log/slurm
 sudo mkdir -p /var/spool/slurmd/StateSave
 sudo chown -R slurm:slurm /var/log/slurm
 sudo chown -R slurm:slurm /var/spool/slurmd
-
 ```
 
 Now create a very minimal file in `/etc/slurm/slurm.conf` with the following content.
 We will assume here that your node hostname is `mgt1`. You need to update it to your real node name for slurm to start. You can get your real node name using command `hostnamectl` (You nee the Static hostname)
 
 ```
+# Documentation:
+# https://slurm.schedmd.com/slurm.conf.html
 
+## Controller
+ClusterName=valhalla
+ControlMachine=mgt1
 
+## Authentication
+SlurmUser=slurm
+AuthType=auth/munge
+CryptoType=crypto/munge
+
+## Files path
+StateSaveLocation=/var/spool/slurmd/StateSave
+SlurmdSpoolDir=/var/spool/slurmd/slurmd
+SlurmctldPidFile=/var/run/slurmctld.pid
+SlurmdPidFile=/var/run/slurmd.pid
+
+## Logging
+SlurmctldDebug=5
+SlurmdDebug=5
+
+## We don't want a node to go back in pool without sys admin acknowledgement
+ReturnToService=0
+
+## Using pmi/pmi2/pmix interface for MPI
+MpiDefault=pmi2
+
+## Basic scheduling based on nodes
+SchedulerType=sched/backfill
+SelectType=select/linear
+
+## Nodes definition
+NodeName=mgt1 Procs=2
+
+## Partitions definition
+PartitionName=all MaxTime=INFINITE State=UP Default=YES Nodes=mgt1
+```
+
+Then create file `/etc/slurm/cgroup.conf` with the following content:
+
+```
+CgroupAutomount=yes
+ConstrainCores=yes
 ```
 
 And start slurm controller and worker daemons:
 
+```
 sudo systemctl start slurmctld
+sudo systemctl status slurmctld
 sudo systemctl start slurmd
+sudo systemctl status slurmd
+```
+
+Note that if you encounter any errors, you can try to launch these manually to get the exact error:
+
+```
+sudo slurmctld -D -vvvvvvv
+```
+
+or
+
+```
+sudo slurmd -D -vvvvvvv
+```
 
 You should now see the cluster using command `sinfo`.
+
+### Submit jobs
+
+#### Submitting without a script
+
+It is possible to launch a very simple job without a script, using the `srun` command. To do that, use `srun` directly, specifying the number of nodes required. For example:
+
+```
+srun -N 1 hostname
+```
+
+Result can be: `valkyrie01`
+
+```
+srun -N 2 hostname
+```
+
+Result can be :
+
+```
+valkyrie01
+valkyrie02
+```
+
+Using this method is a good way to test cluster, or compile code on compute nodes directly, or just use the compute and memory capacity of a node to do simple tasks on it.
+
+#### Basic job script
+
+To submit a basic job scrip, user needs to use `sbatch` command and provides it a script to execute which contains at the beginning some Slurm information.
+
+A very basic script is:
+
+```
+#!/bin/bash                                                                                    
+#SBATCH -J myjob                                                                              
+#SBATCH -o myjob.out.%j                                                                       
+#SBATCH -e myjob.err.%j                                                                       
+#SBATCH -N 1                                                                                   
+#SBATCH -n 1                                                                                   
+#SBATCH --ntasks-per-node=1                                                                    
+#SBATCH -p all                                                                        
+#SBATCH --exclusive                                                                            
+#SBATCH -t 00:10:00                                                                            
+
+echo "###"                                                                                     
+date                                                                                           
+echo "###"                                                                                     
+
+echo "Hello World ! "
+hostname
+sleep 30s
+echo "###"
+date
+echo "###"
+```
+
+It is very important to understand Slurm parameters here:
+*	`-J` is to set the name of the job
+*	`-o` to set the output file of the job
+*	`-e` to set the error output file of the job
+*	`-p` to select partition to use (optional)
+*	`--exclusive` to specify nodes used must not be shared with other users (optional)
+*	`-t` to specify the maximum time allocated to the job (job will be killed if it goes beyond, beware). Using a small time allow to be able to run a job quickly in the waiting queue, using a large time will force to wait more
+*	`-N`, `-n` and `--ntasks-per-node` were already described.
+
+To submit this script, user needs to use sbatch:
+
+```
+sbatch myscript.sh
+```
+
+If the script syntax is ok, `sbatch` will return a job id number. This number can be used to follow the job progress, using `squeue` (assuming job number is 91487):
+
+```
+squeue -j 91487
+```
+
+Check under ST the status of the job. PD (pending), R (running), CA (cancelled), CG (completing), CD (completed), F (failed), TO (timeout), and NF (node failure).
+
+It is also possible to check all user jobs running:
+
+```
+squeue -u myuser
+```
+
+In this example, execution results will be written by Slurm into `myjob.out.91487` and `myjob.err.91487`.
+
+#### Serial job
+
+To launch a very basic serial job, use the following template as a script for `sbatch`:
+
+```
+#!/bin/bash
+#SBATCH -J myjob
+#SBATCH -o myjob.out.%j
+#SBATCH -e myjob.err.%j
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=1
+#SBATCH --exclusive
+#SBATCH -t 03:00:00
+
+echo "############### START #######"
+date
+echo "############### "
+
+/home/myuser/./myexecutable.exe
+
+echo "############### END #######"
+date
+echo "############### "
+```
+
+#### OpenMP job
+
+To launch an OpenMP job (with multithreads), assuming the code was compiled with openmp flags, use:
+
+```
+#!/bin/bash
+#SBATCH -J myjob
+#SBATCH -o myjob.out.%j
+#SBATCH -e myjob.err.%j
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=1
+#SBATCH --exclusive
+#SBATCH -t 03:00:00
+
+## If compute node has 24 cores
+export OMP_NUM_THREADS=24
+## If needed, to be tuned to needs
+export OMP_SCHEDULE="dynamic, 100"
+
+echo "############### START #######"
+date
+echo "############### "
+
+/home/myuser/./myparaexecutable.exe
+
+echo "############### END #######"
+date
+echo "############### "
+```
+
+Note that it is assumed here that a node has 24 cores.
+
+#### MPI job
+
+To submit an MPI job, assuming the code was parallelized with MPI and compile with MPI, use (note the `srun`, replacing the `mpirun`):
+
+```
+#!/bin/bash
+#SBATCH -J myjob
+#SBATCH -o myjob.out.%j
+#SBATCH -e myjob.err.%j
+#SBATCH -N 4
+#SBATCH --ntasks-per-node=24
+#SBATCH --exclusive
+#SBATCH -t 03:00:00
+
+echo "############### START #######"
+date
+echo "############### "
+
+srun /home/myuser/./mympiexecutable.exe
+
+echo "############### END #######"
+date
+echo "############### "
+```
+
+`srun` will act as `mpirun`, but providing automatically all already tuned arguments for the cluster.

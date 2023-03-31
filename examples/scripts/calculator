@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+echo "Please enter operation to perform (like 4+3 or 2*4):"
+read operation
+eval echo Result is: $(($operation))
+

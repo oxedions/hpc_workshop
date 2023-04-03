@@ -41,6 +41,7 @@ Now we need to make prometheus aware of this exporter so it can pull data from i
 
 Let node_exporter running, and go back to prometheus shell, and stop prometheus (Ctrl+c). Then edit prometheus.yml configuration file, and add our node_exporter as a new target:
 
+```yaml
 # A scrape configuration containing exactly one endpoint to scrape:
 # Here it's Prometheus itself.
 scrape_configs:
@@ -53,6 +54,7 @@ scrape_configs:
     # scheme defaults to 'http'.
     static_configs:
       - targets: ["localhost:9090"]
+```
 
 Note that we are using `localhost:9100` here since node_exporter is running on the same server than prometheus (`localhost` means on the same system, it is equivalent to `127.0.0.1`). If we need to pull data from a remote server, we would replace localhost by the remote server ip or hostname.
 

@@ -317,7 +317,7 @@ sudo systemctl start munge
 Now install slurm and configure it with a very minimal cluster.
 
 ```
-sudo apt install slurmd slurmctld
+sudo apt install slurmd slurmctld slurm-client
 sudo mkdir /etc/slurm
 sudo mkdir /var/log/slurm
 sudo mkdir -p /var/spool/slurmd/StateSave
